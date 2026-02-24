@@ -37,7 +37,7 @@ function safeJsonParse(text: string): any | null {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { userId?: string; transcript?: string; itemId?: string };
+    const body = (await req.json()) as { userId?: string; transcript?: string; itemId?: string; assistantText?: string };
     const userId = body.userId;
     const transcript = body.transcript;
 
@@ -45,7 +45,13 @@ export async function POST(req: Request) {
     if (!transcript) return Response.json({ error: "Missing transcript" }, { status: 400 });
 
     const state = await loadOrCreateState(userId);
-    addTranscript(state, transcript, body.itemId);
+
+    // Store the assistant's previous response (if provided) before the user's new utterance
+    if (body.assistantText?.trim()) {
+      addTranscript(state, body.assistantText.trim(), "assistant");
+    }
+
+    addTranscript(state, transcript, "user", body.itemId);
 
     const questionTable = LIFEPLAN_QUESTIONS
       .slice()

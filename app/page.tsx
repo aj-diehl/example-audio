@@ -48,6 +48,8 @@ export default function Page() {
 
   const [transcripts, setTranscripts] = useState<Array<{ at: string; text: string }>>([]);
   const [assistantText, setAssistantText] = useState<string>("");
+  const lastAssistantTurnRef = useRef<string>("");
+  const currentAssistantTurnRef = useRef<string>("");
   const [eventsLog, setEventsLog] = useState<string[]>([]);
   const [lastExtract, setLastExtract] = useState<ExtractResponse | null>(null);
 
@@ -87,11 +89,11 @@ export default function Page() {
     return j;
   }
 
-  async function extractFromTranscript(text: string, itemId?: string) {
+  async function extractFromTranscript(text: string, itemId?: string, assistantText?: string) {
     const r = await fetch(`/api/extract`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, transcript: text, itemId }),
+      body: JSON.stringify({ userId, transcript: text, itemId, assistantText }),
     });
     const j = (await r.json()) as ExtractResponse;
     setLastExtract(j);
@@ -170,11 +172,15 @@ export default function Page() {
 
         const t = msg?.type ?? "unknown";
         if (t === "response.output_text.delta") {
-          setAssistantText((prev) => prev + (msg.delta ?? ""));
+          const delta = msg.delta ?? "";
+          setAssistantText((prev) => prev + delta);
+          currentAssistantTurnRef.current += delta;
         }
 
         if (t === "response.output_text.done") {
-          // Newline between assistant turns
+          // Snapshot the completed assistant turn for sending with the next extraction
+          lastAssistantTurnRef.current = currentAssistantTurnRef.current;
+          currentAssistantTurnRef.current = "";
           setAssistantText((prev) => prev + "\n");
         }
 
@@ -184,8 +190,9 @@ export default function Page() {
 
           setTranscripts((prev) => [{ at: new Date().toLocaleTimeString(), text }, ...prev].slice(0, 50));
 
-          // 1) Run extraction to fill the LifePlan
-          await extractFromTranscript(text, itemId);
+          // 1) Run extraction to fill the LifePlan (include the assistant's last response for conversation context)
+          const prevAssistant = lastAssistantTurnRef.current;
+          await extractFromTranscript(text, itemId, prevAssistant);
 
           // 2) Update instructions and ask the next question / continue
           await sendInstructionsAndPrompt();

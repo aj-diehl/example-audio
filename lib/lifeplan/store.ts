@@ -119,8 +119,8 @@ export function setAnswer(args: {
   };
 }
 
-export function addTranscript(state: LifePlanState, text: string, itemId?: string) {
-  state.transcript.push({ atISO: nowISO(), text, itemId });
+export function addTranscript(state: LifePlanState, text: string, role: "user" | "assistant" = "user", itemId?: string) {
+  state.transcript.push({ atISO: nowISO(), role, text, itemId });
 }
 
 export function addNote(state: LifePlanState, note: string) {

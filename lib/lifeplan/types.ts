@@ -19,6 +19,7 @@ export type LifePlanState = {
   // Full transcript log (in-order)
   transcript: Array<{
     atISO: string;
+    role: "user" | "assistant";
     text: string;
     itemId?: string;
   }>;

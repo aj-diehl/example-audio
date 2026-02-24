@@ -1,6 +1,21 @@
 import { LIFEPLAN_QUESTIONS } from "./questions";
 import type { LifePlanProgress, LifePlanState } from "./types";
 
+function recentConversation(state: LifePlanState, maxTurns = 10): string {
+  if (!state.transcript.length) return "No conversation yet — this is the opening turn.";
+
+  // Take the last N entries to give the agent conversation context
+  const recent = state.transcript.slice(-maxTurns);
+  return recent
+    .map((t) => {
+      const label = t.role === "user" ? "User" : "You";
+      // Trim long entries to keep instructions within token budget
+      const text = t.text.length > 300 ? t.text.slice(0, 300).trim() + "…" : t.text.trim();
+      return `${label}: ${text}`;
+    })
+    .join("\n");
+}
+
 function summarizeCompleted(state: LifePlanState, max = 6): string {
   const completed = Object.values(state.answers)
     .filter((a) => a.status === "complete" && a.answerText.trim().length > 0)
@@ -30,10 +45,12 @@ export function buildVoiceGuideInstructions(args: {
   const current = progress.currentQuestion;
 
   const styleRules = [
-    "You are a calm, warm, practical voice guide.",
+    "You are a calm, warm, practical voice guide having a real conversation — not conducting an interview.",
     "The user should NOT feel like they are filling out a form. Do not mention questionnaires, modules, worksheets, or that you are storing anything.",
     "Keep responses short (1–3 sentences) and ask ONE question at a time.",
+    "CRITICAL: Use the conversation history below to maintain continuity. Reference what the user has already shared to create natural transitions (e.g. 'You mentioned X earlier — building on that…' or 'That connects to something interesting…').",
     "Do not over-paraphrase or repeat the user's words back to them. Acknowledge briefly and move forward.",
+    "When transitioning to a new topic, bridge naturally from what was just discussed. Never abruptly jump to a new question without connecting it to the flow of conversation.",
     "If the user goes off-topic, respond naturally, capture the useful part mentally, then gently steer back to the current question.",
     "If a user answer is thin, ask ONE follow-up question; otherwise advance to the next topic.",
     "Avoid therapy claims. Encourage professional support if the user asks for mental health treatment advice.",
@@ -66,12 +83,17 @@ export function buildVoiceGuideInstructions(args: {
     actionBlock = "Ask a gentle clarifying question to identify what they want to focus on first.";
   }
 
+  const conversationHistory = recentConversation(state);
+
   return [
     "LIFEPLAN VOICE GUIDE INSTRUCTIONS",
     "",
     styleRules,
     "",
     progressLine,
+    "",
+    "Conversation so far (use this to maintain flow and make natural transitions):",
+    conversationHistory,
     "",
     "Recent completed highlights (for your context only; do not read verbatim):",
     completedSummary,
